@@ -37,7 +37,7 @@ const processData = (data, checkboxName) => {
         if (item.properties.Date && item.properties[checkboxName]) {
             if (item.properties[checkboxName].checkbox) {  // Check if the checkbox is true
                 const dateObject = new Date(item.properties.Date.created_time);
-                dateObject.setDate(dateObject.getDate() + 1); // Add one day to the date
+                dateObject.setDate(dateObject.getDate()); // Add one day to the date
                 const date = dateObject.toISOString().split('T')[0]; // Format back to YYYY-MM-DD
                 checkboxMap.set(date, item.properties[checkboxName].checkbox);
             }
