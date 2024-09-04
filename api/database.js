@@ -36,9 +36,20 @@ const processData = (data, checkboxName) => {
     data.forEach(item => {
         if (item.properties.Date && item.properties[checkboxName]) {
             if (item.properties[checkboxName].checkbox) {  // Check if the checkbox is true
+                // const dateObject = new Date(item.properties.Date.created_time);
+                // dateObject.setDate(dateObject.getDate()); // Add one day to the date
+                // const date = dateObject.toISOString().split('T')[0]; // Format back to YYYY-MM-DD
+
+                // 转换为北京时间（UTC+8）
+                const options = {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai' // 北京时间
+                };
                 const dateObject = new Date(item.properties.Date.created_time);
-                dateObject.setDate(dateObject.getDate()); // Add one day to the date
-                const date = dateObject.toISOString().split('T')[0]; // Format back to YYYY-MM-DD
+                const Rawdate = dateObject.toLocaleDateString('zh-CN', options);
+                const date = Rawdate.replace(/\//g, '-');
                 checkboxMap.set(date, item.properties[checkboxName].checkbox);
             }
         }
