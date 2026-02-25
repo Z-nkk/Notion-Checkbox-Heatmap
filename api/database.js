@@ -8,21 +8,38 @@ export default async (req, res) => {
     const checkboxName = process.env.ENV_CHECKBOX_PROPERTY_NAME;  // Name of the checkbox property
 
     try {
-        const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Notion-Version': '2021-05-13',
-                'Content-Type': 'application/json'
-            },
-        });
-        const data = await response.json();
+        // 获取所有页面的数据（支持分页）
+        let allResults = [];
+        let hasMore = true;
+        let nextCursor = undefined;
 
-        if (!response.ok) {
-            throw new Error(`Notion API error: ${response.status} ${JSON.stringify(data)}`);
+        while (hasMore) {
+            const requestBody = nextCursor
+                ? JSON.stringify({ start_cursor: nextCursor })
+                : undefined;
+
+            const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Notion-Version': '2021-05-13',
+                    'Content-Type': 'application/json'
+                },
+                body: requestBody
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(`Notion API error: ${response.status} ${JSON.stringify(data)}`);
+            }
+
+            allResults = allResults.concat(data.results);
+            hasMore = data.has_more;
+            nextCursor = data.next_cursor;
         }
 
-        const processedData = processData(data.results, checkboxName);
+        const processedData = processData(allResults, checkboxName);
         res.json(processedData);
     } catch (error) {
         console.error("Error processing request:", error);
@@ -34,18 +51,11 @@ const processData = (data, checkboxName) => {
     const checkboxMap = new Map();
 
     data.forEach(item => {
-        // if (item.properties.Date && item.properties[checkboxName]) {
-        //     if (item.properties[checkboxName].checkbox) {  // Check if the checkbox is true
-          if (item.properties.Date && item.properties[checkboxName]) {
-              // 检查 Date 属性类型是否为 date，并且有值
-              if (item.properties.Date.type === 'date' &&
-                  item.properties.Date.date &&
-                  item.properties.Date.date.start &&
-                  item.properties[checkboxName].checkbox) {
-                  
-                // const dateObject = new Date(item.properties.Date.created_time);
-                // dateObject.setDate(dateObject.getDate()); // Add one day to the date
-                // const date = dateObject.toISOString().split('T')[0]; // Format back to YYYY-MM-DD
+        if (item.properties.Date && item.properties[checkboxName]) {
+            // 检查 Date 属性类型是否为 created_time，并且有值
+            if (item.properties.Date.type === 'created_time' &&
+                item.properties.Date.created_time &&
+                item.properties[checkboxName].checkbox) {
 
                 // 转换为北京时间（UTC+8）
                 const options = {
@@ -54,8 +64,7 @@ const processData = (data, checkboxName) => {
                     day: '2-digit',
                     timeZone: 'Asia/Shanghai' // 北京时间
                 };
-                // const dateObject = new Date(item.properties.Date.created_time);
-                const dateObject = new Date(item.properties.Date.date.start);
+                const dateObject = new Date(item.properties.Date.created_time);
                 const Rawdate = dateObject.toLocaleDateString('zh-CN', options);
                 const date = Rawdate.replace(/\//g, '-');
                 checkboxMap.set(date, item.properties[checkboxName].checkbox);
@@ -65,4 +74,3 @@ const processData = (data, checkboxName) => {
 
     return Array.from(checkboxMap).map(([date, isChecked]) => ({ date, isChecked }));
 };
-
