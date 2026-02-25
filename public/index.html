@@ -9,22 +9,90 @@
             font-family: Arial, sans-serif;
             margin: 20px;
         }
+
+        /* ========== 自适应提示框样式 ========== */
+        .ch-tooltip {
+            position: fixed !important;
+            pointer-events: none !important;
+            z-index: 99999 !important;
+
+            background: rgba(0, 0, 0, 0.9) !important;
+            color: #ffffff !important;
+            padding: 8px 12px !important;
+            border-radius: 6px !important;
+            font-size: 13px !important;
+            line-height: 1.4 !important;
+
+            white-space: normal !important;
+            max-width: 220px !important;
+            word-wrap: break-word !important;
+
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+
+            opacity: 0 !important;
+            transition: opacity 0.15s ease-out !important;
+        }
+
+        .ch-tooltip.visible {
+            opacity: 1 !important;
+        }
+
+        .ch-tooltip::before {
+            display: none !important;
+        }
+
+        .ch-tooltip::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border: 6px solid transparent;
+        }
+
+        .ch-tooltip.position-top::after {
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-top-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .ch-tooltip.position-bottom::after {
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-bottom-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .ch-tooltip.position-left::after {
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border-left-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .ch-tooltip.position-right::after {
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border-right-color: rgba(0, 0, 0, 0.9);
+        }
     </style>
 </head>
 <body>
     <div id="cal-heatmap"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/d3@3"></script>
     <script src="https://cdn.jsdelivr.net/npm/cal-heatmap/cal-heatmap.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const baseUrl = window.location.origin; // 获取当前页面的根URL
-        
+            const baseUrl = window.location.origin;
+
             const cal = new CalHeatMap();
             cal.init({
                 itemSelector: "#cal-heatmap",
                 domain: "month",
                 subDomain: "day",
-                data: baseUrl + "/api/database", // URL pointing to your serverless function
+                data: baseUrl + "/api/database",
                 start: new Date(new Date().getFullYear(), new Date().getMonth() - 5),
                 cellSize: 10,
                 range: 6,
@@ -32,38 +100,184 @@
                 nextSelector: "#next",
                 previousSelector: "#previous",
                 considerMissingDataAsZero: false,
-                legend: [1], // Legend for non-empty values
+                legend: [1],
                 legendColors: {
                     min: "#ebedf0",
                     max: "#7bc96f",
                     empty: "#ebedf0"
                 },
                 subDomainTitleFormat: {
-                    empty: "Undo on {date}", // Display only the date for empty data cells
-                    filled: "Complete on {date}" // Custom format to show percentage
+                    empty: "Undo on {date}",
+                    filled: "Complete on {date}"
                 },
                 afterLoadData: function(data) {
                     if (!data) {
                         console.error('No data received');
                         return {};
                     }
-            
+
                     var result = {};
                     data.forEach(function(item) {
                         var date = new Date(item.date).getTime() / 1000;
-                        // Set 1 for any non-zero value to utilize the legend [1]
                         result[date] = item.isChecked ? 1 : 0;
                     });
                     return result;
                 }
             });
 
-            // 设置定时器每30秒刷新数据
+            // ========== 自适应提示框系统 ==========
+            function setupAdaptiveTooltip() {
+                var heatmapContainer = document.querySelector('#cal-heatmap');
+                if (!heatmapContainer) return;
+
+                var TOOLTIP_OFFSET = 12;
+                var EDGE_PADDING = 15;
+                var ANIMATION_DELAY = 10;
+
+                var currentTooltip = null;
+                var currentRect = null;
+
+                heatmapContainer.addEventListener('mouseover', function(e) {
+                    var target = e.target;
+
+                    if (target.tagName === 'rect') {
+                        setTimeout(function() {
+                            var tooltip = document.querySelector('.ch-tooltip');
+                            if (!tooltip) return;
+
+                            currentTooltip = tooltip;
+                            currentRect = target.getBoundingClientRect();
+
+                            var position = calculateOptimalPosition(currentRect, tooltip);
+                            applyTooltipPosition(tooltip, position);
+
+                            setTimeout(function() {
+                                tooltip.classList.add('visible');
+                            }, ANIMATION_DELAY);
+
+                        }, ANIMATION_DELAY);
+                    }
+                });
+
+                heatmapContainer.addEventListener('mouseout', function(e) {
+                    if (e.target.tagName === 'rect') {
+                        var tooltip = document.querySelector('.ch-tooltip');
+                        if (tooltip) {
+                            tooltip.classList.remove('visible');
+                        }
+                    }
+                });
+
+                function calculateOptimalPosition(cellRect, tooltip) {
+                    var tooltipRect = tooltip.getBoundingClientRect();
+                    var viewportWidth = window.innerWidth;
+                    var viewportHeight = window.innerHeight;
+
+                    var spaces = {
+                        top: cellRect.top,
+                        bottom: viewportHeight - cellRect.bottom,
+                        left: cellRect.left,
+                        right: viewportWidth - cellRect.right
+                    };
+
+                    var requirements = {
+                        top: tooltipRect.height + TOOLTIP_OFFSET + EDGE_PADDING,
+                        bottom: tooltipRect.height + TOOLTIP_OFFSET + EDGE_PADDING,
+                        left: tooltipRect.width + TOOLTIP_OFFSET + EDGE_PADDING,
+                        right: tooltipRect.width + TOOLTIP_OFFSET + EDGE_PADDING
+                    };
+
+                    var priorities = ['top', 'bottom', 'left', 'right'];
+                    var direction = null;
+
+                    for (var i = 0; i < priorities.length; i++) {
+                        if (spaces[priorities[i]] >= requirements[priorities[i]]) {
+                            direction = priorities[i];
+                            break;
+                        }
+                    }
+
+                    if (!direction) {
+                        direction = Object.keys(spaces).reduce(function(a, b) {
+                            return spaces[a] > spaces[b] ? a : b;
+                        });
+                    }
+
+                    return calculatePosition(direction, cellRect, tooltipRect);
+                }
+
+                function calculatePosition(direction, cellRect, tooltipRect) {
+                    var viewportWidth = window.innerWidth;
+                    var viewportHeight = window.innerHeight;
+                    var top, left;
+
+                    switch (direction) {
+                        case 'top':
+                            top = cellRect.top - tooltipRect.height - TOOLTIP_OFFSET;
+                            left = cellRect.left + (cellRect.width / 2) - (tooltipRect.width / 2);
+                            break;
+                        case 'bottom':
+                            top = cellRect.bottom + TOOLTIP_OFFSET;
+                            left = cellRect.left + (cellRect.width / 2) - (tooltipRect.width / 2);
+                            break;
+                        case 'left':
+                            top = cellRect.top + (cellRect.height / 2) - (tooltipRect.height / 2);
+                            left = cellRect.left - tooltipRect.width - TOOLTIP_OFFSET;
+                            break;
+                        case 'right':
+                            top = cellRect.top + (cellRect.height / 2) - (tooltipRect.height / 2);
+                            left = cellRect.right + TOOLTIP_OFFSET;
+                            break;
+                    }
+
+                    if (direction === 'top' || direction === 'bottom') {
+                        if (left < EDGE_PADDING) {
+                            left = EDGE_PADDING;
+                        } else if (left + tooltipRect.width > viewportWidth - EDGE_PADDING) {
+                            left = viewportWidth - tooltipRect.width - EDGE_PADDING;
+                        }
+                    }
+
+                    if (direction === 'left' || direction === 'right') {
+                        if (top < EDGE_PADDING) {
+                            top = EDGE_PADDING;
+                        } else if (top + tooltipRect.height > viewportHeight - EDGE_PADDING) {
+                            top = viewportHeight - tooltipRect.height - EDGE_PADDING;
+                        }
+                    }
+
+                    top = Math.max(EDGE_PADDING, Math.min(top, viewportHeight - tooltipRect.height - EDGE_PADDING));
+                    left = Math.max(EDGE_PADDING, Math.min(left, viewportWidth - tooltipRect.width - EDGE_PADDING));
+
+                    return { top: top, left: left, direction: direction };
+                }
+
+                function applyTooltipPosition(tooltip, position) {
+                    tooltip.classList.remove('position-top', 'position-bottom', 'position-left', 'position-right');
+                    tooltip.classList.add('position-' + position.direction);
+                    tooltip.style.top = position.top + 'px';
+                    tooltip.style.left = position.left + 'px';
+                }
+
+                var resizeTimeout;
+                window.addEventListener('resize', function() {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(function() {
+                        if (currentTooltip && currentRect) {
+                            var position = calculateOptimalPosition(currentRect, currentTooltip);
+                            applyTooltipPosition(currentTooltip, position);
+                        }
+                    }, 100);
+                });
+            }
+
+            setTimeout(setupAdaptiveTooltip, 500);
+
             setInterval(function() {
-                cal.update(baseUrl + "/api/database"); // 更新为指向无服务器函数的URL
-            }, 30000); // 每30秒刷新一次
+                cal.update(baseUrl + "/api/database");
+            }, 30000);
         });
     </script>
-            
+
 </body>
 </html>
