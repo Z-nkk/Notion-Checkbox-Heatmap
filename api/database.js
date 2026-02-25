@@ -34,8 +34,15 @@ const processData = (data, checkboxName) => {
     const checkboxMap = new Map();
 
     data.forEach(item => {
-        if (item.properties.Date && item.properties[checkboxName]) {
-            if (item.properties[checkboxName].checkbox) {  // Check if the checkbox is true
+        // if (item.properties.Date && item.properties[checkboxName]) {
+        //     if (item.properties[checkboxName].checkbox) {  // Check if the checkbox is true
+          if (item.properties.Date && item.properties[checkboxName]) {
+              // 检查 Date 属性类型是否为 date，并且有值
+              if (item.properties.Date.type === 'date' &&
+                  item.properties.Date.date &&
+                  item.properties.Date.date.start &&
+                  item.properties[checkboxName].checkbox) {
+                  
                 // const dateObject = new Date(item.properties.Date.created_time);
                 // dateObject.setDate(dateObject.getDate()); // Add one day to the date
                 // const date = dateObject.toISOString().split('T')[0]; // Format back to YYYY-MM-DD
@@ -47,7 +54,8 @@ const processData = (data, checkboxName) => {
                     day: '2-digit',
                     timeZone: 'Asia/Shanghai' // 北京时间
                 };
-                const dateObject = new Date(item.properties.Date.created_time);
+                // const dateObject = new Date(item.properties.Date.created_time);
+                const dateObject = new Date(item.properties.Date.date.start);
                 const Rawdate = dateObject.toLocaleDateString('zh-CN', options);
                 const date = Rawdate.replace(/\//g, '-');
                 checkboxMap.set(date, item.properties[checkboxName].checkbox);
@@ -57,3 +65,4 @@ const processData = (data, checkboxName) => {
 
     return Array.from(checkboxMap).map(([date, isChecked]) => ({ date, isChecked }));
 };
+
